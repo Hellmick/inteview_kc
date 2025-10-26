@@ -8,7 +8,6 @@ import com.finance.token.config.TokenServiceConfig
 import com.finance.token.model.AuthServerResponse
 import com.finance.token.model.JWTModel
 import com.finance.token.processors.TokenProcessor
-import com.finance.token.processors.UserTransactionsProcessor
 import org.apache.camel.Exchange
 import org.apache.camel.http.base.HttpOperationFailedException
 import org.apache.camel.model.dataformat.JsonLibrary
@@ -32,7 +31,6 @@ class TokenService @Inject constructor(
             .param().name("code").type(org.apache.camel.model.rest.RestParamType.query).endParam()
             .to("direct:handleAuthCode")
 
-        // code handling route
         from("direct:handleAuthCode")
             .process(tokenProcessor)
             .setHeader("Content-Type", constant("application/x-www-form-urlencoded"))
@@ -41,22 +39,23 @@ class TokenService @Inject constructor(
             .unmarshal().json(JsonLibrary.Jackson, JWTModel::class.java)
             .log("Generated JWT token")
             .to("direct:getTransactions")
+            .setHeader(Exchange.HTTP_RESPONSE_CODE, constant(200))
+            .setHeader(Exchange.CONTENT_TYPE, constant("application/json"))
+            .setBody(simple("{\"status\": \"success\", \"message\": \"JWT Successfully generated\"}"))
 
         from("direct:getTransactions")
             .doTry()
-            .setHeader(Exchange.HTTP_METHOD, constant("GET"))
-            .setHeader("Authorization", simple("Bearer \${body.accessToken}"))
-            .setBody(constant(null))
-            .toD("${config.transactionServiceUrl()}?bridgeEndpoint=true")
-            .log("Transactions fetched: \${body}")
-            .process(UserTransactionsProcessor())
-            .marshal().json(JsonLibrary.Jackson)
-            .to("kafka:user-transactions?brokers=localhost:9092")
-            .log("Transactions published to Kafka topic 'user-transactions'")
+                .setHeader(Exchange.HTTP_METHOD, constant("GET"))
+                .setHeader("Authorization", simple("Bearer \${body.accessToken}"))
+                .setBody(constant(null))
+                .toD("${config.transactionServiceUrl()}?bridgeEndpoint=true")
+                .log("Transactions fetched")
+                .to("kafka:user-transactions?brokers=localhost:9092")
+                .log("Transactions published to Kafka topic")
             .doCatch(HttpOperationFailedException::class.java)
-            .log("Transaction service call failed: \${exception.message}")
+                .log("Transaction service call failed: \${exception.message}")
             .doCatch(Exception::class.java)
-            .log("Unexpected error: \${exception.message}")
+                .log("Unexpected error: \${exception.message}")
             .end()
 
     }
