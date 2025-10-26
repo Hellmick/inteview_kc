@@ -1,68 +1,88 @@
-# token-service
+# TOKEN SERVICE
 
-This project uses Quarkus, the Supersonic Subatomic Java Framework.
+A Kotlin + Quarkus + Apache Camel microservice that handles user authentication through Keycloak, retrieves user transactions from an external service, and publishes them to Kafka.
 
-If you want to learn more about Quarkus, please visit its website: <https://quarkus.io/>.
+## OVERVIEW
 
-## Running the application in dev mode
+This service performs the following sequence:
 
-You can run your application in dev mode that enables live coding using:
+Receives an OAuth2 authorization code from the client.
 
-```shell script
-./gradlew quarkusDev
-```
+Exchanges it for a JWT token via Keycloak.
 
-> **_NOTE:_**  Quarkus now ships with a Dev UI, which is available in dev mode only at <http://localhost:8080/q/dev/>.
+Uses the token to fetch transactions for the user.
 
-## Packaging and running the application
+Publishes the transaction data to a Kafka topic (user-transactions).
 
-The application can be packaged using:
+## ARCHITECTURE
 
-```shell script
-./gradlew build
-```
+Browser/Client → Token Service → Keycloak → Transaction Service → Kafka (user-transactions)
 
-It produces the `quarkus-run.jar` file in the `build/quarkus-app/` directory.
-Be aware that it’s not an _über-jar_ as the dependencies are copied into the `build/quarkus-app/lib/` directory.
+## TECHNOLOGIES USED
 
-The application is now runnable using `java -jar build/quarkus-app/quarkus-run.jar`.
+Quarkus — high-performance Java/Kotlin runtime
+Apache Camel — integration and routing framework
+Keycloak — identity and access management
+Kafka — message streaming platform
+PostgreSQL — database for Keycloak
+Docker Compose — container orchestration for local setup
 
-If you want to build an _über-jar_, execute the following command:
+## SETUP INSTRUCTIONS
 
-```shell script
-./gradlew build -Dquarkus.package.jar.type=uber-jar
-```
+Clone the repository
+git clone https://github.com/Hellmick/inteview_kc.git
+cd token-service
 
-The application, packaged as an _über-jar_, is now runnable using `java -jar build/*-runner.jar`.
+Start dependencies
+docker-compose up -d
 
-## Creating a native executable
+Verify containers are running:
+docker ps
 
-You can create a native executable using:
+You should see services for:
 
-```shell script
-./gradlew build -Dquarkus.native.enabled=true
-```
+keycloak
 
-Or, if you don't have GraalVM installed, you can run the native executable build in a container using:
+keycloak-postgres
 
-```shell script
-./gradlew build -Dquarkus.native.enabled=true -Dquarkus.native.container-build=true
-```
+zookeeper
 
-You can then execute your native executable with: `./build/token-service-1.0.0-SNAPSHOT-runner`
+kafka
 
-If you want to learn more about building native executables, please consult <https://quarkus.io/guides/gradle-tooling>.
+Run the token service:
+./gradlew :token-service:quarkusDev
 
-## Related Guides
+Note: for the token service to work correctly the transaction service needs to be running
 
-- Messaging - Kafka Connector ([guide](https://quarkus.io/guides/kafka-getting-started)): Connect to Kafka with Reactive Messaging
-- Camel Core ([guide](https://camel.apache.org/camel-quarkus/latest/reference/extensions/core.html)): Camel core functionality and basic Camel languages: Constant, ExchangeProperty, Header, Ref, Simple and Tokenize
+By default, it runs on http://localhost:8081
 
-## Provided Code
+## REST API
 
-### Messaging codestart
+GET /token
 
-Use Quarkus Messaging
+Description:
+Accepts an OAuth2 authorization code, fetches a JWT token from Keycloak, retrieves the user’s transactions, and publishes them to Kafka.
 
-[Related Apache Kafka guide section...](https://quarkus.io/guides/kafka-reactive-getting-started)
+Example request:
+curl "http://localhost:8081/token?code=abc123"
 
+## CHECKING MESSAGES IN KAFKA
+
+To read messages from Kafka, run:
+
+docker-compose exec kafka kafka-console-consumer
+--bootstrap-server localhost:9092
+--topic user-transactions
+--from-beginning
+
+Stop consuming with Ctrl + C.
+
+## ENVIRONMENT VARIABLES
+
+KC_TOKEN_SERVICE_URL — Keycloak token endpoint
+
+TRANSACTION_SERVICE_URL — Transaction API endpoint
+
+KAFKA_BROKER — Kafka broker address
+
+QUARKUS_HTTP_PORT — HTTP port for the service
